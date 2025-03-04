@@ -1,0 +1,437 @@
+<!- python -m http.server -->
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Sentiment Analysis Tool</title>
+
+  <!-- Load Transformers.js as an ES module -->
+  <script type="module" src="https://cdn.jsdelivr.net/npm/@xenova/transformers@2.0.1/dist/transformers.min.js"></script>
+
+  <style>
+    :root {
+      /* Colors */
+      --positive-color: #4caf50;
+      --negative-color: #f44336;
+      --neutral-color: #607d8b;
+      --primary-color: #4F46E5; /* Indigo 600 */
+      --background-gradient-start: #EEF2FF; /* Indigo 50 */
+      --background-gradient-end: #E0E7FF;   /* Indigo 100 */
+      --card-color: #FFFFFF;
+      --text-color: #333;
+
+      /* Animation durations */
+      --fade-duration: 1s;
+      --fade-delay: 0.2s;
+    }
+
+    /* Global body styles with a subtle gradient background */
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      color: var(--text-color);
+      background: linear-gradient(to bottom right, var(--background-gradient-start), var(--background-gradient-end));
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      overflow-x: hidden;
+    }
+
+    /* Container for the main card */
+    .container {
+      width: 90%;
+      max-width: 800px;
+      margin: 20px auto;
+      padding: 30px;
+      background-color: var(--card-color);
+      border-radius: 12px;
+      box-shadow: 0 10px 20px rgba(0, 0, 0, 0.15);
+      opacity: 0;
+      animation: fadeInUp var(--fade-duration) ease-in-out forwards var(--fade-delay);
+    }
+
+    /* Heading with a slide-down fade animation */
+    h1 {
+      text-align: center;
+      color: var(--primary-color);
+      font-size: 2.5rem;
+      margin-bottom: 30px;
+      opacity: 0;
+      animation: fadeDown var(--fade-duration) ease forwards;
+    }
+
+    /* Model status (e.g., "Loading...", "Ready...") */
+    .model-status {
+      text-align: center;
+      margin: 10px 0 20px;
+      font-size: 1rem;
+      font-weight: 600;
+    }
+    .model-loading {
+      color: var(--primary-color);
+    }
+    .model-ready {
+      color: var(--positive-color);
+      animation: glow 2s infinite alternate;
+    }
+
+    @keyframes glow {
+      0% {
+        text-shadow: 0 0 5px rgba(76, 175, 80, 0.5);
+      }
+      100% {
+        text-shadow: 0 0 20px rgba(76, 175, 80, 0.9);
+      }
+    }
+
+    /* Label and text area styling */
+    .input-group {
+      margin-bottom: 20px;
+    }
+    label {
+      display: block;
+      margin-bottom: 8px;
+      font-weight: 600;
+      font-size: 1.1rem;
+    }
+    textarea {
+      width: 100%;
+      height: 150px;
+      padding: 12px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      font-size: 1rem;
+      resize: vertical;
+      font-family: inherit;
+      box-sizing: border-box;
+    }
+
+    /* Analyze button with hover and focus transitions */
+    #analyzeButton {
+      display: block;
+      margin: 30px auto 0;
+      background-color: var(--primary-color);
+      color: #fff;
+      border: none;
+      padding: 14px 28px;
+      font-size: 1.1rem;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 600;
+      transition: background-color 0.3s, transform 0.2s;
+    }
+    #analyzeButton:hover {
+      background-color: #4338CA; /* Slightly darker indigo */
+      transform: translateY(-2px) scale(1.02);
+    }
+    #analyzeButton:disabled {
+      background-color: #bdbdbd;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    /* Loader animation */
+    .loader {
+      display: none;
+      text-align: center;
+      margin-top: 20px;
+    }
+    .spinner {
+      border: 4px solid rgba(0, 0, 0, 0.1);
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      border-left-color: var(--primary-color);
+      animation: spin 1s linear infinite;
+      margin: 0 auto;
+    }
+    @keyframes spin {
+      0%   { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    /* Result area */
+    .result {
+      margin-top: 30px;
+      padding: 20px;
+      border-radius: 8px;
+      display: none;
+      opacity: 0;
+      animation: fadeInUp var(--fade-duration) ease-in-out forwards var(--fade-delay);
+    }
+    .positive {
+      background-color: rgba(76, 175, 80, 0.1);
+      border-left: 5px solid var(--positive-color);
+    }
+    .negative {
+      background-color: rgba(244, 67, 54, 0.1);
+      border-left: 5px solid var(--negative-color);
+    }
+    .neutral {
+      background-color: rgba(96, 125, 139, 0.1);
+      border-left: 5px solid var(--neutral-color);
+    }
+    .sentiment-badge {
+      display: inline-block;
+      padding: 8px 16px;
+      border-radius: 20px;
+      font-weight: bold;
+      color: #fff;
+      margin-bottom: 15px;
+    }
+    .badge-positive {
+      background-color: var(--positive-color);
+    }
+    .badge-negative {
+      background-color: var(--negative-color);
+    }
+    .badge-neutral {
+      background-color: var(--neutral-color);
+    }
+    .reason {
+      margin-top: 15px;
+      line-height: 1.6;
+    }
+
+    /* Error message */
+    .api-error {
+      color: var(--negative-color);
+      font-weight: bold;
+      text-align: center;
+      margin-top: 20px;
+      display: none;
+    }
+
+    /* Footer */
+    .footer {
+      margin-top: 40px;
+      text-align: center;
+      color: #666;
+      font-size: 0.9rem;
+    }
+
+    /* Dark mode toggle button */
+    .dark-mode-toggle {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      background: none;
+      border: none;
+      font-size: 1.5rem;
+      cursor: pointer;
+      color: var(--text-color);
+      transition: transform 0.3s;
+    }
+    .dark-mode-toggle:hover {
+      transform: rotate(20deg);
+    }
+
+    /* Dark theme overrides */
+    .dark-theme {
+      --background-gradient-start: #1e1e2f;
+      --background-gradient-end: #2c2c40;
+      --card-color: #2f2f44;
+      --text-color: #e6e6e6;
+    }
+
+    /* Animations */
+    @keyframes fadeInUp {
+      0% {
+        opacity: 0;
+        transform: translateY(30px);
+      }
+      100% {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+    @keyframes fadeDown {
+      0% {
+        opacity: 0;
+        transform: translateY(-50px);
+      }
+      100% {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- Dark Mode Toggle -->
+  <button id="darkModeToggle" class="dark-mode-toggle">🌙</button>
+
+  <!-- Main Container -->
+  <div class="container">
+    <h1>Sentiment Analysis Tool</h1>
+
+    <div class="model-status" id="modelStatus">
+      <span class="model-loading">Loading sentiment model, please wait...</span>
+    </div>
+
+    <div class="input-group">
+      <label for="textInput">Enter your text below:</label>
+      <textarea id="textInput" placeholder="Type or paste your sentence or paragraph here..."></textarea>
+    </div>
+
+    <!-- Analyze Button -->
+    <button id="analyzeButton" disabled>Click to analyze!</button>
+
+    <!-- Loader -->
+    <div class="loader">
+      <div class="spinner"></div>
+      <p>Analyzing sentiment...</p>
+    </div>
+
+    <!-- Error Message -->
+    <div id="apiError" class="api-error">
+      An error occurred while analyzing the sentiment. Please try again.
+    </div>
+
+    <!-- Result Section -->
+    <div id="result" class="result">
+      <div class="sentiment-header">
+        <span id="sentimentBadge" class="sentiment-badge"></span>
+      </div>
+      <div>
+        <strong>Text analyzed:</strong>
+        <p id="analyzedText"></p>
+      </div>
+      <div class="reason">
+        <strong>Reasoning:</strong>
+        <p id="reasonText"></p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div class="footer">
+    <p>Powered by Transformers.js (client‑side) | Created with ❤️</p>
+  </div>
+
+  <script type="module">
+    import { pipeline } from "https://cdn.jsdelivr.net/npm/@xenova/transformers@2.0.1/dist/transformers.min.js";
+
+    // Model: DistilBERT fine-tuned on SST-2 (binary sentiment)
+    const modelName = "Xenova/distilbert-base-uncased-finetuned-sst-2-english";
+
+    const textInput = document.getElementById('textInput');
+    const analyzeButton = document.getElementById('analyzeButton');
+    const result = document.getElementById('result');
+    const sentimentBadge = document.getElementById('sentimentBadge');
+    const analyzedText = document.getElementById('analyzedText');
+    const reasonText = document.getElementById('reasonText');
+    const loader = document.querySelector('.loader');
+    const apiError = document.getElementById('apiError');
+    const darkModeToggle = document.getElementById('darkModeToggle');
+    const modelStatus = document.getElementById('modelStatus');
+
+    // Dark mode toggle
+    if (localStorage.getItem('darkMode') === 'enabled') {
+      document.body.classList.add('dark-theme');
+      darkModeToggle.textContent = '☀️';
+    }
+    darkModeToggle.addEventListener('click', () => {
+      document.body.classList.toggle('dark-theme');
+      if (document.body.classList.contains('dark-theme')) {
+        darkModeToggle.textContent = '☀️';
+        localStorage.setItem('darkMode', 'enabled');
+      } else {
+        darkModeToggle.textContent = '🌙';
+        localStorage.setItem('darkMode', 'disabled');
+      }
+    });
+
+    let sentimentPipeline;
+    (async () => {
+      try {
+        // Load the sentiment analysis pipeline
+        sentimentPipeline = await pipeline('sentiment-analysis', modelName);
+        modelStatus.innerHTML = '<span class="model-ready">Sentiment model loaded! Ready to analyze.</span>';
+        analyzeButton.disabled = false;
+      } catch (error) {
+        console.error('Error loading sentiment model:', error);
+        modelStatus.innerHTML = '<span style="color: var(--negative-color);">Error loading sentiment model.</span>';
+      }
+    })();
+
+    analyzeButton.addEventListener('click', async () => {
+      const text = textInput.value.trim();
+      if (!text) {
+        alert('Please enter some text to analyze.');
+        return;
+      }
+      // Hide previous results
+      result.style.display = 'none';
+      apiError.style.display = 'none';
+      loader.style.display = 'block';
+      analyzeButton.disabled = true;
+
+      try {
+        const analysisResult = await analyzeSentiment(text);
+        displayResult(text, analysisResult);
+      } catch (error) {
+        console.error('Error analyzing sentiment:', error);
+        apiError.style.display = 'block';
+      } finally {
+        loader.style.display = 'none';
+        analyzeButton.disabled = false;
+      }
+    });
+
+    async function analyzeSentiment(text) {
+      // Use the loaded sentiment pipeline
+      const output = await sentimentPipeline(text);
+      // Example output: [{ label: "NEGATIVE", score: 0.995 }, { label: "POSITIVE", score: 0.005 }]
+      // We'll pick the result with the highest score.
+      let best = output[0];
+      for (const res of output) {
+        if (res.score > best.score) {
+          best = res;
+        }
+      }
+
+      // Expand the "neutral" threshold
+      // If best.score is below 0.65 or so, we consider it "Neutral"
+      // Adjust as needed. For example, if best.score < 0.7 => "Neutral"
+      let sentiment;
+      if (best.score < 0.65) {
+        sentiment = "Neutral";
+      } else {
+        sentiment = best.label === "POSITIVE" ? "Positive" : "Negative";
+      }
+
+      const explanation = `The model classified the text as ${sentiment} with a confidence of ${(best.score * 100).toFixed(1)}%. Full output: ${JSON.stringify(output)}`;
+      return { sentiment, reason: explanation };
+    }
+
+    function displayResult(text, analysisResult) {
+      analyzedText.textContent = text;
+      reasonText.textContent = analysisResult.reason;
+      sentimentBadge.textContent = analysisResult.sentiment;
+      result.className = 'result'; // reset
+      sentimentBadge.className = 'sentiment-badge'; // reset
+
+      // Add color classes
+      const label = analysisResult.sentiment.toLowerCase();
+      if (label === 'positive') {
+        result.classList.add('positive');
+        sentimentBadge.classList.add('badge-positive');
+      } else if (label === 'negative') {
+        result.classList.add('negative');
+        sentimentBadge.classList.add('badge-negative');
+      } else {
+        result.classList.add('neutral');
+        sentimentBadge.classList.add('badge-neutral');
+      }
+
+      result.style.display = 'block';
+    }
+  </script>
+</body>
+</html>
