@@ -1,14 +1,11 @@
-<!- python -m http.server -->
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Sentiment Analysis Tool</title>
+  <meta name="description" content="Sentiment analysis that runs fully in your browser with DistilBERT and Transformers.js. Nothing you type leaves your device.">
 
-  <!-- Load Transformers.js as an ES module -->
-  <script type="module" src="https://cdn.jsdelivr.net/npm/@xenova/transformers@2.0.1/dist/transformers.min.js"></script>
 
   <style>
     :root {
@@ -260,6 +257,22 @@
         transform: translateY(0);
       }
     }
+    /* Example chips, hints and per-sentence results */
+    .examples { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+    .examples span { font-size: .9rem; opacity: .75; align-self: center; }
+    .example-chip { border: 1px solid #c7d2fe; background: transparent; color: var(--text-color); border-radius: 999px; padding: 6px 12px; cursor: pointer; font: inherit; font-size: .9rem; }
+    .example-chip:hover { border-color: var(--primary-color); color: var(--primary-color); }
+    .hint { display: flex; justify-content: space-between; font-size: .85rem; opacity: .7; margin-top: 6px; }
+    .input-warning { color: var(--negative-color); font-weight: 600; text-align: center; margin-top: 12px; display: none; }
+    .meter { height: 10px; border-radius: 999px; background: rgba(127,127,127,.2); overflow: hidden; margin: 6px 0 4px; }
+    .meter > div { height: 100%; width: 0; border-radius: 999px; transition: width .6s ease; }
+    .sentences { margin-top: 18px; }
+    .sentences ol { padding-left: 0; list-style: none; margin: 8px 0 0; }
+    .sentences li { display: flex; gap: 10px; align-items: flex-start; padding: 8px 0; border-top: 1px solid rgba(127,127,127,.2); }
+    .sentences .tag { flex: 0 0 auto; font-size: .75rem; font-weight: 700; color: #fff; padding: 3px 9px; border-radius: 999px; margin-top: 2px; }
+    .sentences .score { flex: 0 0 auto; margin-left: auto; font-size: .85rem; opacity: .7; }
+    .privacy { font-size: .85rem; text-align: center; opacity: .7; margin-top: -10px; margin-bottom: 18px; }
+    .dark-theme textarea { background: #24243a; color: var(--text-color); border-color: #44445e; }
   </style>
 </head>
 <body>
@@ -270,6 +283,8 @@
   <div class="container">
     <h1>Sentiment Analysis Tool</h1>
 
+    <p class="privacy">Runs entirely in your browser. Nothing you type is sent anywhere.</p>
+
     <div class="model-status" id="modelStatus">
       <span class="model-loading">Loading sentiment model, please wait...</span>
     </div>
@@ -277,7 +292,15 @@
     <div class="input-group">
       <label for="textInput">Enter your text below:</label>
       <textarea id="textInput" placeholder="Type or paste your sentence or paragraph here..."></textarea>
+      <div class="hint"><span>Ctrl + Enter to analyze</span><span id="charCount">0 characters</span></div>
+      <div class="examples">
+        <span>Try one:</span>
+        <button class="example-chip" type="button" data-text="The onboarding was smooth and the team answered every question within an hour. Really impressed.">Happy customer</button>
+        <button class="example-chip" type="button" data-text="The package arrived two weeks late and support never replied to my emails.">Late delivery</button>
+        <button class="example-chip" type="button" data-text="The interview started on time and lasted forty-five minutes. The panel asked about my last project. I really enjoyed the system design discussion, but the coding round felt rushed.">Mixed review</button>
+      </div>
     </div>
+    <div id="inputWarning" class="input-warning">Please enter some text to analyze.</div>
 
     <!-- Analyze Button -->
     <button id="analyzeButton" disabled>Click to analyze!</button>
@@ -302,9 +325,17 @@
         <strong>Text analyzed:</strong>
         <p id="analyzedText"></p>
       </div>
+      <div>
+        <strong>Confidence:</strong>
+        <div class="meter"><div id="confidenceBar"></div></div>
+      </div>
       <div class="reason">
         <strong>Reasoning:</strong>
         <p id="reasonText"></p>
+      </div>
+      <div id="sentenceSection" class="sentences" hidden>
+        <strong>Sentence by sentence:</strong>
+        <ol id="sentenceList"></ol>
       </div>
     </div>
   </div>
@@ -315,7 +346,7 @@
   </div>
 
   <script type="module">
-    import { pipeline } from "https://cdn.jsdelivr.net/npm/@xenova/transformers@2.0.1/dist/transformers.min.js";
+    import { pipeline } from "https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2/dist/transformers.min.js";
 
     // Model: DistilBERT fine-tuned on SST-2 (binary sentiment)
     const modelName = "Xenova/distilbert-base-uncased-finetuned-sst-2-english";
@@ -330,6 +361,25 @@
     const apiError = document.getElementById('apiError');
     const darkModeToggle = document.getElementById('darkModeToggle');
     const modelStatus = document.getElementById('modelStatus');
+    const inputWarning = document.getElementById('inputWarning');
+    const charCount = document.getElementById('charCount');
+    const confidenceBar = document.getElementById('confidenceBar');
+    const sentenceSection = document.getElementById('sentenceSection');
+    const sentenceList = document.getElementById('sentenceList');
+    const COLORS = { positive: 'var(--positive-color)', negative: 'var(--negative-color)', neutral: 'var(--neutral-color)' };
+
+    textInput.addEventListener('input', () => {
+      charCount.textContent = `${textInput.value.length} characters`;
+      inputWarning.style.display = 'none';
+    });
+    textInput.addEventListener('keydown', (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter' && !analyzeButton.disabled) analyzeButton.click();
+    });
+    document.querySelectorAll('.example-chip').forEach(chip => chip.addEventListener('click', () => {
+      textInput.value = chip.dataset.text;
+      textInput.dispatchEvent(new Event('input'));
+      textInput.focus();
+    }));
 
     // Dark mode toggle
     if (localStorage.getItem('darkMode') === 'enabled') {
@@ -363,7 +413,7 @@
     analyzeButton.addEventListener('click', async () => {
       const text = textInput.value.trim();
       if (!text) {
-        alert('Please enter some text to analyze.');
+        inputWarning.style.display = 'block';
         return;
       }
       // Hide previous results
@@ -375,6 +425,7 @@
       try {
         const analysisResult = await analyzeSentiment(text);
         displayResult(text, analysisResult);
+        await showSentences(text);
       } catch (error) {
         console.error('Error analyzing sentiment:', error);
         apiError.style.display = 'block';
@@ -407,7 +458,38 @@
       }
 
       const explanation = `The model classified the text as ${sentiment} with a confidence of ${(best.score * 100).toFixed(1)}%. Full output: ${JSON.stringify(output)}`;
-      return { sentiment, reason: explanation };
+      return { sentiment, reason: explanation, score: best.score };
+    }
+
+    function splitSentences(text) {
+      if (window.Intl && Intl.Segmenter) {
+        const seg = new Intl.Segmenter('en', { granularity: 'sentence' });
+        return [...seg.segment(text)].map(s => s.segment.trim()).filter(Boolean);
+      }
+      return text.match(/[^.!?]+[.!?]*/g).map(s => s.trim()).filter(Boolean);
+    }
+
+    // For longer text, one label can hide mixed feelings, so score each sentence too.
+    async function showSentences(text) {
+      const sentences = splitSentences(text);
+      sentenceList.innerHTML = '';
+      if (sentences.length < 2) { sentenceSection.hidden = true; return; }
+      for (const sentence of sentences) {
+        const { sentiment, score } = await analyzeSentiment(sentence);
+        const li = document.createElement('li');
+        const tag = document.createElement('span');
+        tag.className = 'tag';
+        tag.textContent = sentiment;
+        tag.style.background = COLORS[sentiment.toLowerCase()];
+        const body = document.createElement('span');
+        body.textContent = sentence;
+        const pct = document.createElement('span');
+        pct.className = 'score';
+        pct.textContent = `${(score * 100).toFixed(0)}%`;
+        li.append(tag, body, pct);
+        sentenceList.appendChild(li);
+      }
+      sentenceSection.hidden = false;
     }
 
     function displayResult(text, analysisResult) {
@@ -430,7 +512,10 @@
         sentimentBadge.classList.add('badge-neutral');
       }
 
+      confidenceBar.style.background = COLORS[label];
+      confidenceBar.style.width = '0';
       result.style.display = 'block';
+      requestAnimationFrame(() => { confidenceBar.style.width = `${(analysisResult.score * 100).toFixed(1)}%`; });
     }
   </script>
 </body>
