@@ -2,521 +2,301 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Sentiment Analysis Tool</title>
-  <meta name="description" content="Sentiment analysis that runs fully in your browser with DistilBERT and Transformers.js. Nothing you type leaves your device.">
-
-
+  <meta name="description" content="Sentiment analysis that runs fully in your browser with RoBERTa or DistilBERT via Transformers.js. Nothing you type leaves your device.">
   <style>
     :root {
-      /* Colors */
-      --positive-color: #4caf50;
-      --negative-color: #f44336;
-      --neutral-color: #607d8b;
-      --primary-color: #4F46E5; /* Indigo 600 */
-      --background-gradient-start: #EEF2FF; /* Indigo 50 */
-      --background-gradient-end: #E0E7FF;   /* Indigo 100 */
-      --card-color: #FFFFFF;
-      --text-color: #333;
+      --bg: #f6f7fb; --card: #ffffff; --soft: #f1f3f9; --border: #e3e6ef; --text: #161a23; --muted: #5d6475;
+      --accent: #4f46e5; --accent-soft: #eef0ff;
+      --pos: #16a34a; --neg: #e11d48; --neu: #64748b;
+      --pos-soft: rgba(22,163,74,.14); --neg-soft: rgba(225,29,72,.13); --neu-soft: rgba(100,116,139,.16);
+      --shadow: 0 1px 2px rgba(16,24,40,.04), 0 12px 32px rgba(16,24,40,.08);
+    }
+    [data-theme="dark"] {
+      --bg: #0b0f19; --card: #121826; --soft: #1a2132; --border: #263049; --text: #e7eaf3; --muted: #98a2b8;
+      --accent: #818cf8; --accent-soft: rgba(129,140,248,.14);
+      --pos: #4ade80; --neg: #fb7185; --neu: #a5b4cb;
+      --pos-soft: rgba(74,222,128,.15); --neg-soft: rgba(251,113,133,.15); --neu-soft: rgba(165,180,203,.14);
+      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 12px 32px rgba(0,0,0,.35);
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.6 -apple-system, "Segoe UI", Inter, Helvetica, Arial, sans-serif; transition: background .2s, color .2s; }
+    main { max-width: 860px; margin: 0 auto; padding: 32px 20px 64px; }
 
-      /* Animation durations */
-      --fade-duration: 1s;
-      --fade-delay: 0.2s;
-    }
+    header { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 24px; }
+    .kicker { font-size: 13px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--accent); }
+    h1 { font-size: clamp(30px, 5vw, 42px); line-height: 1.1; margin: 6px 0 8px; letter-spacing: -.02em; }
+    .lead { color: var(--muted); margin: 0; max-width: 600px; }
+    .theme { flex: 0 0 auto; width: 42px; height: 42px; border-radius: 12px; border: 1px solid var(--border); background: var(--card); color: var(--text); cursor: pointer; font-size: 18px; }
 
-    /* Global body styles with a subtle gradient background */
-    body {
-      margin: 0;
-      padding: 0;
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      color: var(--text-color);
-      background: linear-gradient(to bottom right, var(--background-gradient-start), var(--background-gradient-end));
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      overflow-x: hidden;
-    }
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: 20px; box-shadow: var(--shadow); padding: 24px; }
+    .card + .card { margin-top: 18px; }
 
-    /* Container for the main card */
-    .container {
-      width: 90%;
-      max-width: 800px;
-      margin: 20px auto;
-      padding: 30px;
-      background-color: var(--card-color);
-      border-radius: 12px;
-      box-shadow: 0 10px 20px rgba(0, 0, 0, 0.15);
-      opacity: 0;
-      animation: fadeInUp var(--fade-duration) ease-in-out forwards var(--fade-delay);
-    }
+    .models { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; background: var(--soft); padding: 5px; border-radius: 14px; margin-bottom: 16px; }
+    .models button { border: 0; background: transparent; color: var(--muted); padding: 10px 12px; border-radius: 10px; cursor: pointer; text-align: left; font: inherit; }
+    .models button b { display: block; color: var(--text); font-size: 15px; }
+    .models button span { font-size: 13px; }
+    .models button[aria-pressed="true"] { background: var(--card); box-shadow: 0 1px 3px rgba(0,0,0,.12); }
 
-    /* Heading with a slide-down fade animation */
-    h1 {
-      text-align: center;
-      color: var(--primary-color);
-      font-size: 2.5rem;
-      margin-bottom: 30px;
-      opacity: 0;
-      animation: fadeDown var(--fade-duration) ease forwards;
-    }
+    .status { display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--muted); min-height: 24px; margin-bottom: 12px; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--neu); flex: 0 0 auto; }
+    .dot.ready { background: var(--pos); box-shadow: 0 0 0 4px var(--pos-soft); }
+    .dot.error { background: var(--neg); }
+    .progress { flex: 1; height: 6px; background: var(--soft); border-radius: 999px; overflow: hidden; max-width: 220px; }
+    .progress div { height: 100%; width: 0; background: var(--accent); transition: width .2s; }
 
-    /* Model status (e.g., "Loading...", "Ready...") */
-    .model-status {
-      text-align: center;
-      margin: 10px 0 20px;
-      font-size: 1rem;
-      font-weight: 600;
-    }
-    .model-loading {
-      color: var(--primary-color);
-    }
-    .model-ready {
-      color: var(--positive-color);
-      animation: glow 2s infinite alternate;
-    }
+    textarea { width: 100%; min-height: 150px; padding: 14px 16px; border: 1px solid var(--border); border-radius: 14px; background: var(--soft); color: var(--text); font: inherit; resize: vertical; outline: none; transition: border-color .15s, box-shadow .15s; }
+    textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); background: var(--card); }
+    .meta { display: flex; justify-content: space-between; font-size: 13px; color: var(--muted); margin-top: 6px; }
+    .examples { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; align-items: center; }
+    .examples span { font-size: 14px; color: var(--muted); }
+    .chip { border: 1px solid var(--border); background: var(--card); color: var(--text); border-radius: 999px; padding: 6px 13px; cursor: pointer; font: inherit; font-size: 14px; }
+    .chip:hover { border-color: var(--accent); color: var(--accent); }
+    .actions { display: flex; align-items: center; gap: 14px; margin-top: 18px; }
+    .primary { background: var(--accent); color: #fff; border: 0; border-radius: 12px; padding: 12px 22px; font: 600 15px inherit; cursor: pointer; }
+    .primary:disabled { opacity: .5; cursor: not-allowed; }
+    .warn { color: var(--neg); font-size: 14px; display: none; }
 
-    @keyframes glow {
-      0% {
-        text-shadow: 0 0 5px rgba(76, 175, 80, 0.5);
-      }
-      100% {
-        text-shadow: 0 0 20px rgba(76, 175, 80, 0.9);
-      }
-    }
+    #result { display: none; }
+    .verdict { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+    .badge { font-weight: 700; font-size: 20px; padding: 6px 16px; border-radius: 999px; }
+    .badge.positive { color: var(--pos); background: var(--pos-soft); }
+    .badge.negative { color: var(--neg); background: var(--neg-soft); }
+    .badge.neutral { color: var(--neu); background: var(--neu-soft); }
+    .conf { color: var(--muted); font-size: 15px; }
+    .bars { margin-top: 18px; display: grid; gap: 10px; }
+    .bar { display: grid; grid-template-columns: 78px 1fr 52px; align-items: center; gap: 12px; font-size: 14px; }
+    .bar .track { height: 10px; background: var(--soft); border-radius: 999px; overflow: hidden; }
+    .bar .fill { height: 100%; width: 0; border-radius: 999px; transition: width .6s ease; }
+    .bar .pct { text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }
 
-    /* Label and text area styling */
-    .input-group {
-      margin-bottom: 20px;
-    }
-    label {
-      display: block;
-      margin-bottom: 8px;
-      font-weight: 600;
-      font-size: 1.1rem;
-    }
-    textarea {
-      width: 100%;
-      height: 150px;
-      padding: 12px;
-      border: 1px solid #ddd;
-      border-radius: 8px;
-      font-size: 1rem;
-      resize: vertical;
-      font-family: inherit;
-      box-sizing: border-box;
-    }
+    h2 { font-size: 17px; margin: 0 0 12px; }
+    .highlight { line-height: 2; font-size: 16px; }
+    .highlight mark { color: inherit; padding: 3px 4px; border-radius: 6px; margin-right: 2px; cursor: default; }
+    .highlight mark.positive { background: var(--pos-soft); box-shadow: inset 0 -2px 0 var(--pos); }
+    .highlight mark.negative { background: var(--neg-soft); box-shadow: inset 0 -2px 0 var(--neg); }
+    .highlight mark.neutral { background: var(--neu-soft); box-shadow: inset 0 -2px 0 var(--neu); }
+    .legend { display: flex; gap: 16px; font-size: 13px; color: var(--muted); margin-top: 10px; }
+    .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
 
-    /* Analyze button with hover and focus transitions */
-    #analyzeButton {
-      display: block;
-      margin: 30px auto 0;
-      background-color: var(--primary-color);
-      color: #fff;
-      border: none;
-      padding: 14px 28px;
-      font-size: 1.1rem;
-      border-radius: 8px;
-      cursor: pointer;
-      font-weight: 600;
-      transition: background-color 0.3s, transform 0.2s;
-    }
-    #analyzeButton:hover {
-      background-color: #4338CA; /* Slightly darker indigo */
-      transform: translateY(-2px) scale(1.02);
-    }
-    #analyzeButton:disabled {
-      background-color: #bdbdbd;
-      cursor: not-allowed;
-      transform: none;
-    }
-
-    /* Loader animation */
-    .loader {
-      display: none;
-      text-align: center;
-      margin-top: 20px;
-    }
-    .spinner {
-      border: 4px solid rgba(0, 0, 0, 0.1);
-      width: 36px;
-      height: 36px;
-      border-radius: 50%;
-      border-left-color: var(--primary-color);
-      animation: spin 1s linear infinite;
-      margin: 0 auto;
-    }
-    @keyframes spin {
-      0%   { transform: rotate(0deg); }
-      100% { transform: rotate(360deg); }
-    }
-
-    /* Result area */
-    .result {
-      margin-top: 30px;
-      padding: 20px;
-      border-radius: 8px;
-      display: none;
-      opacity: 0;
-      animation: fadeInUp var(--fade-duration) ease-in-out forwards var(--fade-delay);
-    }
-    .positive {
-      background-color: rgba(76, 175, 80, 0.1);
-      border-left: 5px solid var(--positive-color);
-    }
-    .negative {
-      background-color: rgba(244, 67, 54, 0.1);
-      border-left: 5px solid var(--negative-color);
-    }
-    .neutral {
-      background-color: rgba(96, 125, 139, 0.1);
-      border-left: 5px solid var(--neutral-color);
-    }
-    .sentiment-badge {
-      display: inline-block;
-      padding: 8px 16px;
-      border-radius: 20px;
-      font-weight: bold;
-      color: #fff;
-      margin-bottom: 15px;
-    }
-    .badge-positive {
-      background-color: var(--positive-color);
-    }
-    .badge-negative {
-      background-color: var(--negative-color);
-    }
-    .badge-neutral {
-      background-color: var(--neutral-color);
-    }
-    .reason {
-      margin-top: 15px;
-      line-height: 1.6;
-    }
-
-    /* Error message */
-    .api-error {
-      color: var(--negative-color);
-      font-weight: bold;
-      text-align: center;
-      margin-top: 20px;
-      display: none;
-    }
-
-    /* Footer */
-    .footer {
-      margin-top: 40px;
-      text-align: center;
-      color: #666;
-      font-size: 0.9rem;
-    }
-
-    /* Dark mode toggle button */
-    .dark-mode-toggle {
-      position: absolute;
-      top: 20px;
-      right: 20px;
-      background: none;
-      border: none;
-      font-size: 1.5rem;
-      cursor: pointer;
-      color: var(--text-color);
-      transition: transform 0.3s;
-    }
-    .dark-mode-toggle:hover {
-      transform: rotate(20deg);
-    }
-
-    /* Dark theme overrides */
-    .dark-theme {
-      --background-gradient-start: #1e1e2f;
-      --background-gradient-end: #2c2c40;
-      --card-color: #2f2f44;
-      --text-color: #e6e6e6;
-    }
-
-    /* Animations */
-    @keyframes fadeInUp {
-      0% {
-        opacity: 0;
-        transform: translateY(30px);
-      }
-      100% {
-        opacity: 1;
-        transform: translateY(0);
-      }
-    }
-    @keyframes fadeDown {
-      0% {
-        opacity: 0;
-        transform: translateY(-50px);
-      }
-      100% {
-        opacity: 1;
-        transform: translateY(0);
-      }
-    }
-    /* Example chips, hints and per-sentence results */
-    .examples { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
-    .examples span { font-size: .9rem; opacity: .75; align-self: center; }
-    .example-chip { border: 1px solid #c7d2fe; background: transparent; color: var(--text-color); border-radius: 999px; padding: 6px 12px; cursor: pointer; font: inherit; font-size: .9rem; }
-    .example-chip:hover { border-color: var(--primary-color); color: var(--primary-color); }
-    .hint { display: flex; justify-content: space-between; font-size: .85rem; opacity: .7; margin-top: 6px; }
-    .input-warning { color: var(--negative-color); font-weight: 600; text-align: center; margin-top: 12px; display: none; }
-    .meter { height: 10px; border-radius: 999px; background: rgba(127,127,127,.2); overflow: hidden; margin: 6px 0 4px; }
-    .meter > div { height: 100%; width: 0; border-radius: 999px; transition: width .6s ease; }
-    .sentences { margin-top: 18px; }
-    .sentences ol { padding-left: 0; list-style: none; margin: 8px 0 0; }
-    .sentences li { display: flex; gap: 10px; align-items: flex-start; padding: 8px 0; border-top: 1px solid rgba(127,127,127,.2); }
-    .sentences .tag { flex: 0 0 auto; font-size: .75rem; font-weight: 700; color: #fff; padding: 3px 9px; border-radius: 999px; margin-top: 2px; }
-    .sentences .score { flex: 0 0 auto; margin-left: auto; font-size: .85rem; opacity: .7; }
-    .privacy { font-size: .85rem; text-align: center; opacity: .7; margin-top: -10px; margin-bottom: 18px; }
-    .dark-theme textarea { background: #24243a; color: var(--text-color); border-color: #44445e; }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--border); }
+    th { color: var(--muted); font-weight: 600; }
+    td.win { font-weight: 700; color: var(--accent); }
+    .small { font-size: 13px; color: var(--muted); margin: 10px 0 0; }
+    footer { text-align: center; color: var(--muted); font-size: 13px; margin-top: 28px; }
+    footer a { color: var(--accent); }
+    @media (max-width: 560px) { .models { grid-template-columns: 1fr; } .card { padding: 18px; } }
   </style>
 </head>
 <body>
-  <!-- Dark Mode Toggle -->
-  <button id="darkModeToggle" class="dark-mode-toggle">🌙</button>
-
-  <!-- Main Container -->
-  <div class="container">
-    <h1>Sentiment Analysis Tool</h1>
-
-    <p class="privacy">Runs entirely in your browser. Nothing you type is sent anywhere.</p>
-
-    <div class="model-status" id="modelStatus">
-      <span class="model-loading">Loading sentiment model, please wait...</span>
+<main>
+  <header>
+    <div>
+      <div class="kicker">NLP in the browser</div>
+      <h1>Sentiment Analysis Tool</h1>
+      <p class="lead">Paste any text to see if it reads positive, negative or neutral, and how each sentence scores on its own. The model runs on your device, so nothing you type is sent anywhere.</p>
     </div>
+    <button id="theme" class="theme" aria-label="Switch dark or light mode">◐</button>
+  </header>
 
-    <div class="input-group">
-      <label for="textInput">Enter your text below:</label>
-      <textarea id="textInput" placeholder="Type or paste your sentence or paragraph here..."></textarea>
-      <div class="hint"><span>Ctrl + Enter to analyze</span><span id="charCount">0 characters</span></div>
-      <div class="examples">
-        <span>Try one:</span>
-        <button class="example-chip" type="button" data-text="The onboarding was smooth and the team answered every question within an hour. Really impressed.">Happy customer</button>
-        <button class="example-chip" type="button" data-text="The package arrived two weeks late and support never replied to my emails.">Late delivery</button>
-        <button class="example-chip" type="button" data-text="The hotel room was spotless and the staff were lovely. Breakfast, though, was cold and the wifi kept dropping all night.">Mixed review</button>
-      </div>
+  <section class="card">
+    <div class="models" role="group" aria-label="Choose a model">
+      <button data-model="roberta" aria-pressed="true"><b>Accurate</b><span>RoBERTa · positive, neutral, negative</span></button>
+      <button data-model="distilbert" aria-pressed="false"><b>Fast</b><span>DistilBERT · smaller download</span></button>
     </div>
-    <div id="inputWarning" class="input-warning">Please enter some text to analyze.</div>
+    <div class="status"><span id="dot" class="dot"></span><span id="statusText">Loading model...</span><div class="progress" id="progress"><div id="progressBar"></div></div></div>
 
-    <!-- Analyze Button -->
-    <button id="analyzeButton" disabled>Click to analyze!</button>
-
-    <!-- Loader -->
-    <div class="loader">
-      <div class="spinner"></div>
-      <p>Analyzing sentiment...</p>
+    <label for="textInput" class="sr-only" style="position:absolute;left:-9999px">Text to analyze</label>
+    <textarea id="textInput" maxlength="5000" placeholder="Type or paste a review, a message, some feedback..."></textarea>
+    <div class="meta"><span>Ctrl + Enter to analyze</span><span id="charCount">0 / 5000</span></div>
+    <div class="examples">
+      <span>Try one:</span>
+      <button class="chip" data-text="The onboarding was smooth and the team answered every question within an hour. Really impressed.">Happy customer</button>
+      <button class="chip" data-text="The package arrived two weeks late and support never replied to my emails.">Late delivery</button>
+      <button class="chip" data-text="The hotel room was spotless and the staff were lovely. Breakfast, though, was cold and the wifi kept dropping all night. Checkout is at 11am.">Mixed review</button>
+      <button class="chip" data-text="The meeting has been moved to Thursday at 3pm in room 204.">Just facts</button>
     </div>
-
-    <!-- Error Message -->
-    <div id="apiError" class="api-error">
-      An error occurred while analyzing the sentiment. Please try again.
+    <div class="actions">
+      <button id="analyzeButton" class="primary" disabled>Analyze</button>
+      <span id="inputWarning" class="warn">Type or paste some text first.</span>
     </div>
+  </section>
 
-    <!-- Result Section -->
-    <div id="result" class="result">
-      <div class="sentiment-header">
-        <span id="sentimentBadge" class="sentiment-badge"></span>
-      </div>
-      <div>
-        <strong>Text analyzed:</strong>
-        <p id="analyzedText"></p>
-      </div>
-      <div>
-        <strong>Confidence:</strong>
-        <div class="meter"><div id="confidenceBar"></div></div>
-      </div>
-      <div class="reason">
-        <strong>Reasoning:</strong>
-        <p id="reasonText"></p>
-      </div>
-      <div id="sentenceSection" class="sentences" hidden>
-        <strong>Sentence by sentence:</strong>
-        <ol id="sentenceList"></ol>
-      </div>
+  <section class="card" id="result" aria-live="polite">
+    <div class="verdict"><span id="badge" class="badge"></span><span id="conf" class="conf"></span></div>
+    <div class="bars" id="bars"></div>
+    <div id="sentenceSection" style="margin-top:24px" hidden>
+      <h2>Sentence by sentence</h2>
+      <div id="highlight" class="highlight"></div>
+      <div class="legend"><span><i style="background:var(--pos)"></i>Positive</span><span><i style="background:var(--neu)"></i>Neutral</span><span><i style="background:var(--neg)"></i>Negative</span></div>
     </div>
-  </div>
+  </section>
 
-  <!-- Footer -->
-  <div class="footer">
-    <p>Powered by Transformers.js (client‑side) | Created with ❤️</p>
-  </div>
+  <section class="card">
+    <h2>How accurate is it?</h2>
+    <table>
+      <tr><th>Labeled test data (200 random samples each)</th><th>Accurate (RoBERTa)</th><th>Fast (DistilBERT)</th></tr>
+      <tr><td>Tweets: positive / neutral / negative</td><td class="win">78.5%</td><td>46.5%</td></tr>
+      <tr><td>Product reviews: positive / neutral / negative</td><td class="win">71.5%</td><td>64.5%</td></tr>
+      <tr><td>Movie review sentences: positive / negative only</td><td>79.5%</td><td class="win">85.0%</td></tr>
+    </table>
+    <p class="small">DistilBERT was trained on positive vs negative movie reviews, so it can't really say "neutral". It only guesses neutral when it's unsure. RoBERTa was trained with a real neutral class, which is why it does much better on everyday text. You can re-run the benchmark yourself with <a href="eval/">eval/</a>.</p>
+  </section>
 
-  <script type="module">
-    import { pipeline } from "https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2/dist/transformers.min.js";
+  <footer>Built by Amatya Katyayan with <a href="https://github.com/xenova/transformers.js">Transformers.js</a> · <a href="https://github.com/Amatya27/sentiment-analysis-tool">Source on GitHub</a></footer>
+</main>
 
-    // Model: DistilBERT fine-tuned on SST-2 (binary sentiment)
-    const modelName = "Xenova/distilbert-base-uncased-finetuned-sst-2-english";
+<script type="module">
+  import { pipeline } from "https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2/dist/transformers.min.js";
 
-    const textInput = document.getElementById('textInput');
-    const analyzeButton = document.getElementById('analyzeButton');
-    const result = document.getElementById('result');
-    const sentimentBadge = document.getElementById('sentimentBadge');
-    const analyzedText = document.getElementById('analyzedText');
-    const reasonText = document.getElementById('reasonText');
-    const loader = document.querySelector('.loader');
-    const apiError = document.getElementById('apiError');
-    const darkModeToggle = document.getElementById('darkModeToggle');
-    const modelStatus = document.getElementById('modelStatus');
-    const inputWarning = document.getElementById('inputWarning');
-    const charCount = document.getElementById('charCount');
-    const confidenceBar = document.getElementById('confidenceBar');
-    const sentenceSection = document.getElementById('sentenceSection');
-    const sentenceList = document.getElementById('sentenceList');
-    const COLORS = { positive: 'var(--positive-color)', negative: 'var(--negative-color)', neutral: 'var(--neutral-color)' };
+  const MODELS = {
+    roberta: { id: "Xenova/twitter-roberta-base-sentiment-latest", name: "RoBERTa", classes: ["positive", "neutral", "negative"] },
+    distilbert: { id: "Xenova/distilbert-base-uncased-finetuned-sst-2-english", name: "DistilBERT", classes: ["positive", "negative"] },
+  };
+  const NEUTRAL_BELOW = 0.65; // DistilBERT has no neutral class, so low confidence counts as neutral
 
-    textInput.addEventListener('input', () => {
-      charCount.textContent = `${textInput.value.length} characters`;
-      inputWarning.style.display = 'none';
-    });
-    textInput.addEventListener('keydown', (e) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter' && !analyzeButton.disabled) analyzeButton.click();
-    });
-    document.querySelectorAll('.example-chip').forEach(chip => chip.addEventListener('click', () => {
-      textInput.value = chip.dataset.text;
-      textInput.dispatchEvent(new Event('input'));
-      textInput.focus();
-    }));
+  const $ = (id) => document.getElementById(id);
+  const textInput = $("textInput"), analyzeButton = $("analyzeButton");
+  const loaded = {};
+  let current = "roberta";
 
-    // Dark mode toggle
-    if (localStorage.getItem('darkMode') === 'enabled') {
-      document.body.classList.add('dark-theme');
-      darkModeToggle.textContent = '☀️';
-    }
-    darkModeToggle.addEventListener('click', () => {
-      document.body.classList.toggle('dark-theme');
-      if (document.body.classList.contains('dark-theme')) {
-        darkModeToggle.textContent = '☀️';
-        localStorage.setItem('darkMode', 'enabled');
-      } else {
-        darkModeToggle.textContent = '🌙';
-        localStorage.setItem('darkMode', 'disabled');
-      }
-    });
+  // Theme: follow the system unless the user picked one
+  const root = document.documentElement;
+  const savedTheme = (() => { try { return localStorage.getItem("theme"); } catch { return null; } })();
+  root.dataset.theme = savedTheme || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+  $("theme").addEventListener("click", () => {
+    root.dataset.theme = root.dataset.theme === "dark" ? "light" : "dark";
+    try { localStorage.setItem("theme", root.dataset.theme); } catch {}
+  });
 
-    let sentimentPipeline;
-    (async () => {
-      try {
-        // Load the sentiment analysis pipeline
-        sentimentPipeline = await pipeline('sentiment-analysis', modelName);
-        modelStatus.innerHTML = '<span class="model-ready">Sentiment model loaded! Ready to analyze.</span>';
-        analyzeButton.disabled = false;
-      } catch (error) {
-        console.error('Error loading sentiment model:', error);
-        modelStatus.innerHTML = '<span style="color: var(--negative-color);">Error loading sentiment model.</span>';
-      }
-    })();
+  function setStatus(text, state, pct) {
+    $("statusText").textContent = text;
+    $("dot").className = "dot" + (state ? " " + state : "");
+    $("progress").style.display = pct == null ? "none" : "block";
+    if (pct != null) $("progressBar").style.width = pct + "%";
+  }
 
-    analyzeButton.addEventListener('click', async () => {
-      const text = textInput.value.trim();
-      if (!text) {
-        inputWarning.style.display = 'block';
-        return;
-      }
-      // Hide previous results
-      result.style.display = 'none';
-      apiError.style.display = 'none';
-      loader.style.display = 'block';
-      analyzeButton.disabled = true;
-
-      try {
-        const analysisResult = await analyzeSentiment(text);
-        displayResult(text, analysisResult);
-        await showSentences(text);
-      } catch (error) {
-        console.error('Error analyzing sentiment:', error);
-        apiError.style.display = 'block';
-      } finally {
-        loader.style.display = 'none';
-        analyzeButton.disabled = false;
-      }
-    });
-
-    async function analyzeSentiment(text) {
-      // Use the loaded sentiment pipeline
-      const output = await sentimentPipeline(text);
-      // Example output: [{ label: "NEGATIVE", score: 0.995 }, { label: "POSITIVE", score: 0.005 }]
-      // We'll pick the result with the highest score.
-      let best = output[0];
-      for (const res of output) {
-        if (res.score > best.score) {
-          best = res;
+  async function load(key) {
+    if (loaded[key]) return loaded[key];
+    const files = {};
+    setStatus(`Downloading ${MODELS[key].name} (first time only, then it's cached)...`, "", 0);
+    loaded[key] = pipeline("sentiment-analysis", MODELS[key].id, {
+      progress_callback: (p) => {
+        if (p.status === "progress" && p.total) {
+          files[p.file] = [p.loaded, p.total];
+          const [a, b] = Object.values(files).reduce((s, [l, t]) => [s[0] + l, s[1] + t], [0, 0]);
+          setStatus(`Downloading ${MODELS[key].name}...`, "", Math.round((a / b) * 100));
         }
-      }
+      },
+    });
+    try { return await loaded[key]; } catch (e) { delete loaded[key]; throw e; }
+  }
 
-      // Expand the "neutral" threshold
-      // If best.score is below 0.65 or so, we consider it "Neutral"
-      // Adjust as needed. For example, if best.score < 0.7 => "Neutral"
-      let sentiment;
-      if (best.score < 0.65) {
-        sentiment = "Neutral";
-      } else {
-        sentiment = best.label === "POSITIVE" ? "Positive" : "Negative";
-      }
-
-      const explanation = `The model classified the text as ${sentiment} with a confidence of ${(best.score * 100).toFixed(1)}%. Full output: ${JSON.stringify(output)}`;
-      return { sentiment, reason: explanation, score: best.score };
+  async function useModel(key) {
+    current = key;
+    document.querySelectorAll(".models button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.model === key)));
+    analyzeButton.disabled = true;
+    try {
+      await load(key);
+      if (current !== key) return;
+      setStatus(`${MODELS[key].name} is ready`, "ready");
+      analyzeButton.disabled = false;
+    } catch (e) {
+      console.error(e);
+      setStatus("Couldn't load the model. Check your connection and refresh.", "error");
     }
+  }
 
-    function splitSentences(text) {
-      if (window.Intl && Intl.Segmenter) {
-        const seg = new Intl.Segmenter('en', { granularity: 'sentence' });
-        return [...seg.segment(text)].map(s => s.segment.trim()).filter(Boolean);
-      }
-      return text.match(/[^.!?]+[.!?]*/g).map(s => s.trim()).filter(Boolean);
+  async function classify(text) {
+    const clf = await load(current);
+    const out = await clf(text, { topk: 3 });
+    const scores = Object.fromEntries(out.map((o) => [o.label.toLowerCase(), o.score]));
+    let label = Object.entries(scores).sort((a, b) => b[1] - a[1])[0][0];
+    if (current === "distilbert" && scores[label] < NEUTRAL_BELOW) label = "neutral";
+    return { label, scores };
+  }
+
+  function splitSentences(text) {
+    if (window.Intl && Intl.Segmenter) {
+      return [...new Intl.Segmenter("en", { granularity: "sentence" }).segment(text)].map((s) => s.segment.trim()).filter(Boolean);
     }
+    return (text.match(/[^.!?]+[.!?]*/g) || [text]).map((s) => s.trim()).filter(Boolean);
+  }
 
-    // For longer text, one label can hide mixed feelings, so score each sentence too.
-    async function showSentences(text) {
-      const sentences = splitSentences(text);
-      sentenceList.innerHTML = '';
-      if (sentences.length < 2) { sentenceSection.hidden = true; return; }
-      for (const sentence of sentences) {
-        const { sentiment, score } = await analyzeSentiment(sentence);
-        const li = document.createElement('li');
-        const tag = document.createElement('span');
-        tag.className = 'tag';
-        tag.textContent = sentiment;
-        tag.style.background = COLORS[sentiment.toLowerCase()];
-        const body = document.createElement('span');
-        body.textContent = sentence;
-        const pct = document.createElement('span');
-        pct.className = 'score';
-        pct.textContent = `${(score * 100).toFixed(0)}%`;
-        li.append(tag, body, pct);
-        sentenceList.appendChild(li);
-      }
-      sentenceSection.hidden = false;
+  function showResult({ label, scores }) {
+    $("badge").textContent = label[0].toUpperCase() + label.slice(1);
+    $("badge").className = "badge " + label;
+    const top = Math.max(...Object.values(scores));
+    $("conf").textContent = current === "distilbert" && label === "neutral"
+      ? `the model wasn't sure either way (${(top * 100).toFixed(1)}%)`
+      : `${(top * 100).toFixed(1)}% confident · ${MODELS[current].name}`;
+    const colors = { positive: "var(--pos)", neutral: "var(--neu)", negative: "var(--neg)" };
+    $("bars").innerHTML = "";
+    for (const c of MODELS[current].classes) {
+      const row = document.createElement("div");
+      row.className = "bar";
+      row.innerHTML = `<span>${c[0].toUpperCase() + c.slice(1)}</span><div class="track"><div class="fill"></div></div><span class="pct">${((scores[c] || 0) * 100).toFixed(1)}%</span>`;
+      row.querySelector(".fill").style.background = colors[c];
+      $("bars").appendChild(row);
+      requestAnimationFrame(() => (row.querySelector(".fill").style.width = `${(scores[c] || 0) * 100}%`));
     }
+    $("result").style.display = "block";
+  }
 
-    function displayResult(text, analysisResult) {
-      analyzedText.textContent = text;
-      reasonText.textContent = analysisResult.reason;
-      sentimentBadge.textContent = analysisResult.sentiment;
-      result.className = 'result'; // reset
-      sentimentBadge.className = 'sentiment-badge'; // reset
-
-      // Add color classes
-      const label = analysisResult.sentiment.toLowerCase();
-      if (label === 'positive') {
-        result.classList.add('positive');
-        sentimentBadge.classList.add('badge-positive');
-      } else if (label === 'negative') {
-        result.classList.add('negative');
-        sentimentBadge.classList.add('badge-negative');
-      } else {
-        result.classList.add('neutral');
-        sentimentBadge.classList.add('badge-neutral');
-      }
-
-      confidenceBar.style.background = COLORS[label];
-      confidenceBar.style.width = '0';
-      result.style.display = 'block';
-      requestAnimationFrame(() => { confidenceBar.style.width = `${(analysisResult.score * 100).toFixed(1)}%`; });
+  // One label for a paragraph can hide mixed feelings, so each sentence is scored too
+  async function showSentences(text) {
+    const sentences = splitSentences(text);
+    const box = $("highlight");
+    box.innerHTML = "";
+    if (sentences.length < 2) { $("sentenceSection").hidden = true; return; }
+    for (const s of sentences) {
+      const { label, scores } = await classify(s);
+      const mark = document.createElement("mark");
+      mark.className = label;
+      mark.textContent = s;
+      mark.title = `${label} · ${(Math.max(...Object.values(scores)) * 100).toFixed(0)}%`;
+      box.append(mark, " ");
     }
-  </script>
+    $("sentenceSection").hidden = false;
+  }
+
+  analyzeButton.addEventListener("click", async () => {
+    const text = textInput.value.trim();
+    if (!text) { $("inputWarning").style.display = "inline"; return; }
+    analyzeButton.disabled = true;
+    analyzeButton.textContent = "Analyzing...";
+    try {
+      showResult(await classify(text));
+      await showSentences(text);
+      $("result").scrollIntoView({ behavior: "smooth", block: "nearest" });
+    } catch (e) {
+      console.error(e);
+      setStatus("Something went wrong while analyzing. Please try again.", "error");
+    } finally {
+      analyzeButton.disabled = false;
+      analyzeButton.textContent = "Analyze";
+    }
+  });
+
+  textInput.addEventListener("input", () => {
+    $("charCount").textContent = `${textInput.value.length} / 5000`;
+    $("inputWarning").style.display = "none";
+  });
+  textInput.addEventListener("keydown", (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === "Enter" && !analyzeButton.disabled) analyzeButton.click();
+  });
+  document.querySelectorAll(".chip").forEach((chip) => chip.addEventListener("click", () => {
+    textInput.value = chip.dataset.text;
+    textInput.dispatchEvent(new Event("input"));
+    textInput.focus();
+  }));
+  document.querySelectorAll(".models button").forEach((b) => b.addEventListener("click", () => {
+    if (b.dataset.model !== current) useModel(b.dataset.model);
+  }));
+
+  useModel("roberta");
+</script>
 </body>
 </html>
