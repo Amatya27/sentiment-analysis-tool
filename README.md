@@ -14,7 +14,7 @@ Paste any text and it tells you whether it reads positive, negative or neutral, 
 
 - **Model:** DistilBERT fine-tuned on SST-2 (`Xenova/distilbert-base-uncased-finetuned-sst-2-english`), run with [Transformers.js](https://github.com/xenova/transformers.js). The model downloads once and is cached by the browser, so everything after that runs on your own device. Nothing you type leaves the page.
 - **Neutral:** SST-2 only knows positive and negative. If the model's top score is below 65%, I call it neutral instead of forcing a side.
-- **Sentence by sentence:** one label for a whole paragraph can hide mixed feelings ("the panel was great, but the coding round felt rushed"). For text with more than one sentence, it splits it with `Intl.Segmenter` and scores each sentence separately.
+- **Sentence by sentence:** one label for a whole paragraph can hide mixed feelings (a spotless room, but cold breakfast and bad wifi). For text with more than one sentence, it splits it with `Intl.Segmenter` and scores each sentence separately.
 
 ## Features
 
