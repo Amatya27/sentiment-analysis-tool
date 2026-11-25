@@ -5,7 +5,7 @@
 </p>
 
 <p align="center">
-  <a href="https://amatya27.github.io/sentiment-analysis-tool/"><img src="media/screenshot.png" width="720" alt="Sentiment Analysis Tool showing a mixed review scored overall and sentence by sentence"></a>
+  <a href="https://amatya27.github.io/sentiment-analysis-tool/"><img src="media/screenshot.png" width="460" alt="Sentiment Analysis Tool showing a mixed review scored overall and sentence by sentence"></a>
 </p>
 
 Paste any text and it tells you whether it reads positive, negative or neutral, how confident it is and, for longer text, how each sentence scores on its own. I built it while exploring how text analysis could help with hiring workflows, like reading candidate feedback or interview notes.
